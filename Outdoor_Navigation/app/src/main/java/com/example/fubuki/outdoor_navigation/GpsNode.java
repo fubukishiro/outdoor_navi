@@ -8,7 +8,7 @@ public class GpsNode {
     private final double k1 = 96029;
     private final double k2 = 112000;
     private ArrayList<GpsPoint> gpsPointArray = new ArrayList<>();
-    private Node loraNode = new Node(1.0/100000,5.0/100000);
+    private Node loraNode = new Node(2.0/100000,10.0/100000);
 
     public void addGpsPoint(GpsPoint newPoint)
     {
@@ -23,12 +23,15 @@ public class GpsNode {
     {
         int number = gpsPointArray.size();
         loraNode.clear();
-        for (int i = 0; i < number - 1; i++) {
-            Point temp0 = getNodePoint(gpsPointArray.get(i), gpsPointArray.get(i + 1), false);
-            Point temp1 = getNodePoint(gpsPointArray.get(i), gpsPointArray.get(i + 1), true);
-            loraNode.addNode(temp0);
-            loraNode.addNode(temp1);
-
+        for(int i=0;i<number;i++)
+        {
+            for(int j=0;j<number-i-1;j++)
+            {
+                Point temp0 = getNodePoint(gpsPointArray.get(j), gpsPointArray.get(j + i + 1), false);
+                Point temp1 = getNodePoint(gpsPointArray.get(j), gpsPointArray.get(j + i + 1), true);
+                loraNode.addNode(temp0);
+                loraNode.addNode(temp1);
+            }
         }
         Log.e("Lora","Lora:"+loraNode.nodePointArray.size());
         for(int i = 0;i < loraNode.nodePointArray.size(); i++){

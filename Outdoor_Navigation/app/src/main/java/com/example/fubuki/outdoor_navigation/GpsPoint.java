@@ -36,10 +36,11 @@ public class GpsPoint {
         double x = 0;
         double y = 0;
         double pointAngle = 0;
+        angle = 0;
         double nextPointDistance = otherGpsPoint.getDistance();
         double distanceToNextPoint = this.getDistanceFromNextPoint(otherGpsPoint);
         double T = ((this.distance)*(this.distance)+(distanceToNextPoint)*(distanceToNextPoint)-(nextPointDistance)*(nextPointDistance))/(2*distance*distanceToNextPoint);
-        if(T >= 0.9999 )
+        if(T >= 0.9999)
         {
             T = 0.999999;
         }
@@ -48,6 +49,37 @@ public class GpsPoint {
             T = -0.9999999;
         }
         pointAngle = Math.acos(T);
+        //用gps点的数据计算夹角
+
+        GpsPoint P0 = new GpsPoint(this.getLongitude(),otherGpsPoint.getLatitude(),0,0);
+        double L01 = P0.getDistanceFromNextPoint(this);
+        double L12 = distanceToNextPoint;
+        double cosa = L01/L12;
+        if(cosa>=0.999999999)
+        {
+            cosa = 0.99999999;
+        }
+        if(cosa<=-0.999999999)
+        {
+            cosa = -0.99999999;
+        }
+        if((otherGpsPoint.getLatitude()>=this.getLatitude()&&(otherGpsPoint.getLongitude()>=this.getLongitude())))        //1
+        {
+            angle = Math.acos(cosa);
+        }
+        else if((otherGpsPoint.getLatitude()>=this.getLatitude()&&(otherGpsPoint.getLongitude()<this.getLongitude())))   //2
+        {
+            angle = Math.PI - Math.acos(cosa);
+        }
+        else if((otherGpsPoint.getLatitude()<this.getLatitude()&&(otherGpsPoint.getLongitude()<this.getLongitude())))   //3
+        {
+            angle = Math.PI + Math.acos(cosa);
+        }
+        else if((otherGpsPoint.getLatitude()<this.getLatitude()&&(otherGpsPoint.getLongitude()>=this.getLongitude())))   //4
+        {
+            angle = 2 * Math.PI - Math.acos(cosa);
+        }
+
         if(pointNumber)
         {
             x = this.longitude + this.distance*Math.cos(pointAngle+Math.PI/2-angle)/k1;

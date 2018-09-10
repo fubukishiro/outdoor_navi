@@ -12,6 +12,14 @@ public class Node {
         accuracy = pAccuracy;
         width = pWidth;
     }
+    public int getSize()
+    {
+        return  nodePointArray.size();
+    }
+    public Point get(int i)
+    {
+        return nodePointArray.get(i);
+    }
     public void clear()
     {
         nodePointArray.clear();
@@ -20,27 +28,30 @@ public class Node {
     {
         nodePointArray.add(pPoint);
     }
-    public void setAccuracy(double pAccuracy)
-    {
-        accuracy = pAccuracy;
-    }
-    public void setWidth(double pWidth)
-    {
-        width = pWidth;
-    }
+
     public Point getNodeLocation()
     {
-        int pointCount = nodePointArray.size();
-        double sumPosition = getSumPosition();
-        double subPosition = getSubPosition();
         ArrayList<Point> areaPointGroup = new ArrayList<>();
-
+        Node sumNode = new Node(accuracy,width);
+        int pointCount = this.getSize();
+        double sumPosition = this.getSumPosition();
         for(int i=0;i<pointCount;i++)
         {
-            Point temp = nodePointArray.get(i);
+            Point temp = this.get(i);
             double tempSum = temp.getSum();
+            if((tempSum>=sumPosition)&&(tempSum<=sumPosition+width))
+            {
+                sumNode.addNode(temp);
+            }
+
+        }
+        double subPosition = sumNode.getSubPosition();
+        int sumLength = sumNode.getSize();
+        for(int i=0;i<sumLength;i++)
+        {
+            Point temp = sumNode.get(i);
             double tempSub = temp.getSub();
-            if((tempSum>=sumPosition)&&(tempSum<=sumPosition+width)&&(tempSub>=subPosition)&&(tempSub<=subPosition+width))
+            if((tempSub>=subPosition)&&(tempSub<=subPosition+width))
             {
                 areaPointGroup.add(temp);
             }
