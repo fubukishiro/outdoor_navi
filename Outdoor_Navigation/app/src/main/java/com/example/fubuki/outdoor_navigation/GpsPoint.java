@@ -10,8 +10,8 @@ public class GpsPoint {
     private double longitude;   //经度
     private double latitude;    //纬度
     private double distance;
-    private final double k1 = 96029;
-    private final double k2 = 112000;
+    public static final double k1 = 96029;
+    public static final double k2 = 112000;
 
     GpsPoint(double pLongitude,double pLatitude,double pAngle,double pDistance)
     {

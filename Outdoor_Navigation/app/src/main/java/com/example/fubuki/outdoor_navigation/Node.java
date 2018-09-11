@@ -4,8 +4,9 @@ import java.util.ArrayList;
 
 public class Node {
     public ArrayList<Point> nodePointArray = new ArrayList<>();
-    public static double accuracy;
-    public static double width;
+    private double accuracy;
+    private double width;
+    private int angleIncrement;
 
     public Node(double pAccuracy,double pWidth)
     {
@@ -29,34 +30,67 @@ public class Node {
         nodePointArray.add(pPoint);
     }
 
-    public Point getNodeLocation()
+    public Point getNodeLocation(Point pNewGpsPoint,double pDistance,double pRadius)
     {
         ArrayList<Point> areaPointGroup = new ArrayList<>();
-        Node sumNode = new Node(accuracy,width);
         int pointCount = this.getSize();
-        double sumPosition = this.getSumPosition();
-        for(int i=0;i<pointCount;i++)
+        //TODO
+        //增加角度增量的set方法
+        angleIncrement = 3;
+        //遍历所有角度
+        int[] numberInCircle = new int[(int)(360.0/this.angleIncrement)+1] ;
+        System.out.println("angleNumber"+numberInCircle.length);
+        for(int angle = 0;angle< 360; angle+=this.angleIncrement)
+        {
+            double circleX = pNewGpsPoint.getX()+pDistance*Math.cos(angle/180.0*Math.PI)/GpsPoint.k1;
+            double circleY = pNewGpsPoint.getY()+pDistance*Math.sin(angle/180.0*Math.PI)/GpsPoint.k2;
+            for (int i = 0; i < pointCount; i++)
+            {
+                Point temp = this.get(i);
+                double sum = (temp.getX()-circleX)*(temp.getX()-circleX)*GpsPoint.k1*GpsPoint.k1+(temp.getY()-circleY)*(temp.getY()-circleY)*GpsPoint.k2*GpsPoint.k2;
+                //  System.out.println("sum"+sum);
+                //  System.out.println("pRadius"+pRadius*pRadius);
+                if(sum <= pRadius*pRadius)
+                {
+                    //    System.out.println("Get Point");
+                    int position = angle/this.angleIncrement;
+                    numberInCircle[position]++;
+                    //  System.out.println("Position "+position);
+                }
+            }
+        }
+
+        //找到最大圆区间
+        int maxNumberInCircle = numberInCircle[0];
+        int anglePosition = 0;
+        for(int angle = 0;angle< 360; angle+=this.angleIncrement)
+        {
+            if(numberInCircle[angle/this.angleIncrement]>=maxNumberInCircle)
+            {
+                anglePosition = angle/this.angleIncrement;
+                maxNumberInCircle = numberInCircle[anglePosition];
+                System.out.println("maxNumberInCircle in Circle"+maxNumberInCircle);
+            }
+        }
+
+        //找到最大圆区间的点
+        double circleX = pNewGpsPoint.getX()+pDistance*Math.cos(anglePosition*this.angleIncrement/180.0*Math.PI)/GpsPoint.k1;
+        double circleY = pNewGpsPoint.getY()+pDistance*Math.sin(anglePosition*this.angleIncrement/180.0*Math.PI)/GpsPoint.k2;
+        System.out.println("pointCount"+pointCount);
+        for (int i = 0; i < pointCount; i++)
         {
             Point temp = this.get(i);
-            double tempSum = temp.getSum();
-            if((tempSum>=sumPosition)&&(tempSum<=sumPosition+width))
+            double sum = (temp.getX()-circleX)*(temp.getX()-circleX)*GpsPoint.k1*GpsPoint.k1+(temp.getY()-circleY)*(temp.getY()-circleY)*GpsPoint.k2*GpsPoint.k2;
+            if(sum <= pRadius*pRadius)
             {
-                sumNode.addNode(temp);
-            }
-
-        }
-        double subPosition = sumNode.getSubPosition();
-        int sumLength = sumNode.getSize();
-        for(int i=0;i<sumLength;i++)
-        {
-            Point temp = sumNode.get(i);
-            double tempSub = temp.getSub();
-            if((tempSub>=subPosition)&&(tempSub<=subPosition+width))
-            {
-                areaPointGroup.add(temp);
+                System.out.println("sum"+sum);
+                System.out.println("pRadius"+pRadius*pRadius);
+                areaPointGroup.add(new Point(temp.getX(),temp.getY(),0));
+                System.out.println("Add result Lora Point");
             }
         }
         int resultLength = areaPointGroup.size();
+        System.out.println("resultLength "+resultLength);
         double xSum = 0;
         double ySum = 0;
         for(int i=0;i<resultLength;i++)

@@ -152,10 +152,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
         searchBtn.setOnClickListener(this);
 
-        Button setBtn = findViewById(R.id.setBtn);
-
-        setBtn.setOnClickListener(this);
-
         //获取地图控件引用
         mMapView = (MapView) findViewById(R.id.bmapView);
         mBaiduMap = mMapView.getMap();
@@ -336,14 +332,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     disconnect_BLE();
                     bluetoothGatt = null;
                 }
-                break;
-            case R.id.setBtn:
-                EditText msg = findViewById(R.id.editText);
-                String[] strArray = null;
-                strArray = msg.getText().toString().split(",");
-                //Log.e(TAG,strArray[0]);
-                gpsPointSet.setAccuracy(convertToDouble(strArray[0],0)/100000,convertToDouble(strArray[1],0)/100000);
-                //gpsPointSet.getAccuracy();
                 break;
             default:
                 break;
