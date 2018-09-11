@@ -8,7 +8,7 @@ public class GpsNode {
     private final double k1 = 96029;
     private final double k2 = 112000;
     private ArrayList<GpsPoint> gpsPointArray = new ArrayList<>();
-    private Node loraNode = new Node(2.0/100000,10.0/100000);
+    private Node loraNode = new Node(1.0/100000,5.0/100000);
 
     public void addGpsPoint(GpsPoint newPoint)
     {
@@ -43,6 +43,14 @@ public class GpsNode {
 
     public int getNodeNumber(){
         return gpsPointArray.size();
+    }
+
+    public void setAccuracy(double accuracy,double width){
+        loraNode.accuracy = accuracy;
+        loraNode.width = width;
+    }
+    public void getAccuracy(){
+        Log.e("Node:","距离"+loraNode.accuracy);
     }
 }
 

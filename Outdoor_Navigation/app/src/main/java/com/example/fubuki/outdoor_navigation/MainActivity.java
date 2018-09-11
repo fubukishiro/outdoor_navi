@@ -31,7 +31,9 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.baidu.location.BDLocation;
@@ -56,6 +58,8 @@ import com.baidu.mapapi.utils.DistanceUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -110,10 +114,35 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private static final int UPDATE_STATUS= 1;
     private static final int DISCONN_BLE = 2;
     private static final int UPDATE_LIST = 3;
+    private static final int TIMER_LOCATION = 4;
+    private static final int NEW_DISTANCE = 5;
 
     private double rcvDis; //从终端接收回来的距离
 
     private int positionNumber;
+
+    //定时器相关
+    private final Timer locationTimer = new Timer();
+    private TimerTask locationTask;
+    private double currentLatitude,currrentLongitude,lastLatitude,lastLongitude;
+
+    //线程相关测试
+    private class Token {
+        private boolean flag;
+        public Token() {
+            setFlag(false);
+        }
+        public void setFlag(boolean flag) {
+            this.flag = flag;
+        }
+        public boolean getFlag() {
+            return flag;
+        }
+    }
+    private Token token = null;
+
+    private boolean toggleFlag = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -122,6 +151,11 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         Button searchBtn = findViewById(R.id.getLocation);
 
         searchBtn.setOnClickListener(this);
+
+        Button setBtn = findViewById(R.id.setBtn);
+
+        setBtn.setOnClickListener(this);
+
         //获取地图控件引用
         mMapView = (MapView) findViewById(R.id.bmapView);
         mBaiduMap = mMapView.getMap();
@@ -137,6 +171,8 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         option.setOpenGps(true); // 打开gps
         option.setCoorType("bd09ll"); // 设置坐标类型
         option.setScanSpan(1000);//定位请求时间间隔
+        option.setLocationMode(LocationClientOption.LocationMode.Hight_Accuracy);
+
         locationClient.setLocOption(option);
         //开启定位
         locationClient.start();
@@ -174,6 +210,28 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         positionNumber = 0;
 
         rcvDis = 0;
+
+        //定时相关
+        currentLatitude = 0;
+        currrentLongitude = 0;
+        lastLatitude = 0;
+        lastLongitude = 0;
+        locationTask = new TimerTask() {
+            @Override
+            public void run() {
+                // TODO Auto-generated method stub
+                Message message = new Message();
+                message.what = TIMER_LOCATION;
+                handler.sendMessage(message);
+            }
+        };
+        locationTimer.schedule(locationTask, 1000, 2000);
+
+        token = new Token();
+        if(!token.getFlag())
+            Log.e("A","the token flag value is null");
+        else
+            Log.e("A","the token flag value is"+token.getFlag());
     }
 
     final SensorEventListener mySensorListener = new SensorEventListener() {
@@ -239,7 +297,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             case R.id.getLocation:
                 //缺distance
                 Log.e(TAG,"相关信息:"+globalLatitude+" "+globalLongitude+" "+orientationValues[0]+" "+rcvDis);
-               GpsPoint currentGpsPoint = new GpsPoint(globalLongitude,globalLatitude,orientationValues[0],rcvDis);
+                GpsPoint currentGpsPoint = new GpsPoint(globalLongitude,globalLatitude,orientationValues[0],rcvDis);
                 gpsPointSet.addGpsPoint(currentGpsPoint);
                 if(gpsPointSet.getNodeNumber() > 1){
                     Point nodePosition = gpsPointSet.getNodePosition();
@@ -278,6 +336,14 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     disconnect_BLE();
                     bluetoothGatt = null;
                 }
+                break;
+            case R.id.setBtn:
+                EditText msg = findViewById(R.id.editText);
+                String[] strArray = null;
+                strArray = msg.getText().toString().split(",");
+                //Log.e(TAG,strArray[0]);
+                gpsPointSet.setAccuracy(convertToDouble(strArray[0],0)/100000,convertToDouble(strArray[1],0)/100000);
+                //gpsPointSet.getAccuracy();
                 break;
             default:
                 break;
@@ -384,6 +450,19 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
                 rcvDis = convertToDouble(strs[1],0);
                 Log.e(TAG,"接收到的距离："+rcvDis);
+
+                Message tempMsg = new Message();
+                tempMsg.what = NEW_DISTANCE;
+                handler.sendMessage(tempMsg);
+                toggleFlag = !toggleFlag;
+
+                if(token.getFlag()) {
+                    synchronized (token) {
+                        token.setFlag(false);
+                        token.notifyAll();
+                        Log.e(TAG,"线程重新启动");
+                    }
+                }
                 return;
             }
         });
@@ -428,6 +507,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             globalLatitude = location.getLatitude();
             globalLongitude = location.getLongitude();
 
+            //定时器相关
+            currentLatitude = globalLatitude;
+            currrentLongitude = globalLongitude;
+
             LatLng llText = new LatLng(globalLatitude, globalLongitude);
 
 //构建文字Option对象，用于在地图上添加文字
@@ -471,6 +554,30 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
     }
 
+    private void getCurrentLocation(){
+        LatLng p1 = new LatLng(currentLatitude,currrentLongitude);
+        LatLng p2 = new LatLng(lastLatitude,lastLongitude);
+
+        double distance = DistanceUtil.getDistance(p1,p2);
+
+        /*if(distance > 10){
+            //TODO
+            //此处是距离大于十米的操作
+          if(bluetoothGattCharacteristic != null) {
+              synchronized (token) {
+                  try {
+                      token.setFlag(true);
+                      Log.e(TAG, "线程挂起");
+                      token.wait();
+                  } catch (InterruptedException e) {
+                      e.printStackTrace();
+                  }
+              }
+          }
+        }*/
+        lastLongitude = currrentLongitude;
+        lastLatitude = currentLatitude;
+    }
     private Handler handler = new Handler(){
 
         public void handleMessage(Message msg){
@@ -486,6 +593,13 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     break;
                 case UPDATE_LIST:
                     arrayAdapter.notifyDataSetChanged();
+                    break;
+                case TIMER_LOCATION:
+                    getCurrentLocation();
+                    break;
+                case NEW_DISTANCE:
+                    TextView distanceText = findViewById(R.id.distance);
+                    distanceText.setText("位置信息："+rcvDis+" "+ toggleFlag);
                     break;
                 default:
                     break;
@@ -505,4 +619,5 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
 
     }
+
 }

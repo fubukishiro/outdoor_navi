@@ -31,7 +31,39 @@
                 android:text="打开蓝牙"
                 android:textColor="#ffffff"
                 android:textSize="60px" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:id="@+id/distance"
+                android:text="距离信息："/>
         </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <EditText
+                android:background="@drawable/input_column"
+                android:id="@+id/editText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="60px"
+                android:layout_marginLeft="60px"
+                android:layout_marginRight="60px"
+                android:hint="例：k1,k2"
+                android:layout_marginTop="30px"
+                android:layout_marginBottom="30px"
+                />
+            <Button
+                android:background="@drawable/buttonshape"
+                android:id="@+id/setBtn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="设定精度"
+                android:textColor="#ffffff"
+                android:textSize="60px" />
+
+        </LinearLayout>
+
         <com.baidu.mapapi.map.MapView
             android:id="@+id/bmapView"
             android:layout_width="match_parent"

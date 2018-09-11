@@ -4,8 +4,8 @@ import java.util.ArrayList;
 
 public class Node {
     public ArrayList<Point> nodePointArray = new ArrayList<>();
-    private double accuracy;
-    private double width;
+    public static double accuracy;
+    public static double width;
 
     public Node(double pAccuracy,double pWidth)
     {
