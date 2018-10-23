@@ -42,6 +42,7 @@ import com.baidu.location.LocationClient;
 import com.baidu.location.LocationClientOption;
 import com.baidu.mapapi.CoordType;
 import com.baidu.mapapi.SDKInitializer;
+import com.baidu.mapapi.map.ArcOptions;
 import com.baidu.mapapi.map.BaiduMap;
 import com.baidu.mapapi.map.BitmapDescriptor;
 import com.baidu.mapapi.map.BitmapDescriptorFactory;
@@ -52,6 +53,8 @@ import com.baidu.mapapi.map.MarkerOptions;
 import com.baidu.mapapi.map.MyLocationConfiguration;
 import com.baidu.mapapi.map.MyLocationData;
 import com.baidu.mapapi.map.OverlayOptions;
+import com.baidu.mapapi.map.Polyline;
+import com.baidu.mapapi.map.PolylineOptions;
 import com.baidu.mapapi.map.TextOptions;
 import com.baidu.mapapi.model.LatLng;
 import com.baidu.mapapi.utils.DistanceUtil;
@@ -62,6 +65,9 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
 import java.util.regex.Pattern;
+
+import static com.example.fubuki.outdoor_navigation.MyUtil.calculateAngle;
+import static java.lang.Double.NaN;
 
 
 public class MainActivity extends AppCompatActivity implements AdapterView.OnItemClickListener,View.OnClickListener{
@@ -116,6 +122,8 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private static final int UPDATE_LIST = 3;
     private static final int TIMER_LOCATION = 4;
     private static final int NEW_DISTANCE = 5;
+    private static final int MOVE_FORWARD = 6;
+    private static final int NEW_SAMPLE = 7;
 
     private double rcvDis; //从终端接收回来的距离
 
@@ -124,7 +132,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     //定时器相关
     private final Timer locationTimer = new Timer();
     private TimerTask locationTask;
-    private double currentLatitude,currrentLongitude,lastLatitude,lastLongitude;
+    private double currentLatitude,currentLongitude,firstLatitude,firstLongitude,lastNodeLatitude,lastNodeLongitude,prevNodeLatitude,prevNodeLongitude;
 
     //线程相关测试
     private class Token {
@@ -142,7 +150,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private Token token = null;
 
     private boolean toggleFlag = false;
+    private boolean isFirstDistance = true;
+    private boolean isSecondPoint = true;
 
+    private Polyline mPolyline;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -151,10 +162,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         Button searchBtn = findViewById(R.id.getLocation);
 
         searchBtn.setOnClickListener(this);
-
-        Button setBtn = findViewById(R.id.setBtn);
-
-        setBtn.setOnClickListener(this);
 
         //获取地图控件引用
         mMapView = (MapView) findViewById(R.id.bmapView);
@@ -213,16 +220,29 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
         //定时相关
         currentLatitude = 0;
-        currrentLongitude = 0;
-        lastLatitude = 0;
-        lastLongitude = 0;
+        currentLongitude = 0;
+        firstLatitude = 0;
+        firstLongitude = 0;
+        lastNodeLatitude = 0;
+        lastNodeLongitude = 0;
+        prevNodeLatitude = 0;
+        prevNodeLongitude = 0;
+
         locationTask = new TimerTask() {
             @Override
             public void run() {
                 // TODO Auto-generated method stub
-                Message message = new Message();
-                message.what = TIMER_LOCATION;
-                handler.sendMessage(message);
+                //Message message = new Message();
+                //message.what = TIMER_LOCATION;
+                //handler.sendMessage(message);
+                //Log.e(TAG,"isSecondPoint:"+isSecondPoint);
+
+                if(!isFirstDistance && isSecondPoint) {
+                    getSecondLocation();
+                }
+                if(!isFirstDistance) {
+                    checkDistance();
+                }
             }
         };
         locationTimer.schedule(locationTask, 1000, 2000);
@@ -268,6 +288,83 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         handler.sendMessage(tempMsg);
     }
 
+    private void checkDistance(){
+        LatLng p1 = new LatLng(currentLatitude,currentLongitude);
+        LatLng p2 = new LatLng(lastNodeLatitude,lastNodeLongitude);
+        LatLng p3 = new LatLng(prevNodeLatitude,prevNodeLongitude);
+
+        Log.e(TAG,"检测"+DistanceUtil.getDistance(p1,p2));
+        Log.e(TAG,"检测二"+DistanceUtil.getDistance(p1,p3));
+        if((DistanceUtil.getDistance(p1,p2) < 10 || DistanceUtil.getDistance(p1,p3) > 10) && prevNodeLatitude>0 && prevNodeLongitude>0){
+            Log.e(TAG,"检测到距离小于10米或大于旧的位置10米");
+            if(bluetoothGattCharacteristic != null) {
+                synchronized (token) {
+                    try {
+                        token.setFlag(true);
+                        Log.e(TAG, "线程挂起");
+                        token.wait();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            Log.e(TAG,"线程重新恢复 in checkDistance");
+            GpsPoint currentGpsPoint = new GpsPoint(globalLongitude,globalLatitude,orientationValues[0],rcvDis);
+
+            gpsPointSet.addGpsPoint(currentGpsPoint);
+            //if(gpsPointSet.getNodeNumber() > 1){
+                Point nodePosition = gpsPointSet.getNodePosition();
+                Log.e(TAG,"x:"+nodePosition.getX()+"   "+"y:"+nodePosition.getY());
+
+                if( nodePosition.getY()==NaN || nodePosition.getX() == NaN ||nodePosition.getY()==0.0 || nodePosition.getX()==0.0) {
+                    Log.e(TAG,"计算出的距离是NaN，不更新");
+                    return;
+                }else{
+                    lastNodeLatitude = nodePosition.getY();
+                    lastNodeLongitude = nodePosition.getX();
+                }
+                prevNodeLatitude = currentLatitude;
+                prevNodeLongitude = currentLongitude;
+
+                //TODO:要显示在屏幕上
+                mBaiduMap.clear();
+                LatLng point = new LatLng(nodePosition.getY(), nodePosition.getX());
+
+                BitmapDescriptor bitmap;
+                if(rcvDis > 5){
+                    bitmap = BitmapDescriptorFactory
+                            .fromResource(R.drawable.icon_temp);
+                    Message tempMsg = new Message();
+                    tempMsg.what = NEW_SAMPLE;
+                    handler.sendMessage(tempMsg);
+
+                }else{
+                    bitmap = BitmapDescriptorFactory
+                            .fromResource(R.drawable.icon_en);
+                }
+
+                OverlayOptions option = new MarkerOptions()
+                        .position(point)
+                        .icon(bitmap);
+
+                mBaiduMap.addOverlay(option);
+
+                LatLng llText = new LatLng(nodePosition.getY(), nodePosition.getX());
+
+//构建文字Option对象，用于在地图上添加文字
+                OverlayOptions textOption = new TextOptions()
+                        .bgColor(0xAAFFFF00)
+                        .fontSize(24)
+                        .fontColor(0xFFFF00FF)
+                        .text(Integer.toString(positionNumber++))
+                        .position(llText);
+
+//在地图上添加该文字对象并显示
+                mBaiduMap.addOverlay(textOption);
+            //}else{}
+        }
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -292,42 +389,53 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         mMapView.onPause();
     }
 
+    private void getLocation(){
+        Log.e(TAG,"相关信息:"+globalLatitude+" "+globalLongitude+" "+orientationValues[0]+" "+rcvDis);
+        GpsPoint currentGpsPoint = new GpsPoint(globalLongitude,globalLatitude,orientationValues[0],rcvDis);
+        gpsPointSet.addGpsPoint(currentGpsPoint);
+        //if(gpsPointSet.getNodeNumber() > 1){
+            Point nodePosition = gpsPointSet.getNodePosition();
+            Log.e(TAG,"x:"+nodePosition.getX()+"   "+"y:"+nodePosition.getY());
+
+            lastNodeLatitude = nodePosition.getY();
+            lastNodeLongitude = nodePosition.getX();
+
+            if(isSecondPoint){
+                prevNodeLongitude = globalLongitude;
+                prevNodeLatitude = globalLatitude;
+            }
+
+            //TODO:要显示在屏幕上
+            mBaiduMap.clear();
+            LatLng point = new LatLng(nodePosition.getY(), nodePosition.getX());
+
+            BitmapDescriptor bitmap = BitmapDescriptorFactory
+                    .fromResource(R.drawable.icon_temp);
+
+            OverlayOptions option = new MarkerOptions()
+                    .position(point)
+                    .icon(bitmap);
+
+            mBaiduMap.addOverlay(option);
+
+            LatLng llText = new LatLng(nodePosition.getY(), nodePosition.getX());
+
+//构建文字Option对象，用于在地图上添加文字
+            OverlayOptions textOption = new TextOptions()
+                    .bgColor(0xAAFFFF00)
+                    .fontSize(24)
+                    .fontColor(0xFFFF00FF)
+                    .text(Integer.toString(positionNumber++))
+                    .position(llText);
+
+//在地图上添加该文字对象并显示
+            mBaiduMap.addOverlay(textOption);
+        //}else{}
+    }
     public void onClick(View view){
         switch(view.getId()){
             case R.id.getLocation:
-                //缺distance
-                Log.e(TAG,"相关信息:"+globalLatitude+" "+globalLongitude+" "+orientationValues[0]+" "+rcvDis);
-                GpsPoint currentGpsPoint = new GpsPoint(globalLongitude,globalLatitude,orientationValues[0],rcvDis);
-                gpsPointSet.addGpsPoint(currentGpsPoint);
-                if(gpsPointSet.getNodeNumber() > 1){
-                    Point nodePosition = gpsPointSet.getNodePosition();
-                    Log.e(TAG,"x:"+nodePosition.getX()+"   "+"y:"+nodePosition.getY());
-                    //TODO:要显示在屏幕上
-                    mBaiduMap.clear();
-                    LatLng point = new LatLng(nodePosition.getY(), nodePosition.getX());
-
-                    BitmapDescriptor bitmap = BitmapDescriptorFactory
-                            .fromResource(R.drawable.icon_marka);
-
-                    OverlayOptions option = new MarkerOptions()
-                            .position(point)
-                            .icon(bitmap);
-
-                    mBaiduMap.addOverlay(option);
-
-                    LatLng llText = new LatLng(nodePosition.getY(), nodePosition.getX());
-
-//构建文字Option对象，用于在地图上添加文字
-                    OverlayOptions textOption = new TextOptions()
-                            .bgColor(0xAAFFFF00)
-                            .fontSize(24)
-                            .fontColor(0xFFFF00FF)
-                            .text(Integer.toString(positionNumber++))
-                            .position(llText);
-
-//在地图上添加该文字对象并显示
-                    mBaiduMap.addOverlay(textOption);
-                }else{}
+                getLocation();
                 break;
             case R.id.searchBtn: //蓝牙
                 if(bluetoothGatt == null){
@@ -336,14 +444,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     disconnect_BLE();
                     bluetoothGatt = null;
                 }
-                break;
-            case R.id.setBtn:
-                EditText msg = findViewById(R.id.editText);
-                String[] strArray = null;
-                strArray = msg.getText().toString().split(",");
-                //Log.e(TAG,strArray[0]);
-                gpsPointSet.setAccuracy(convertToDouble(strArray[0],0)/100000,convertToDouble(strArray[1],0)/100000);
-                //gpsPointSet.getAccuracy();
                 break;
             default:
                 break;
@@ -463,6 +563,18 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                         Log.e(TAG,"线程重新启动");
                     }
                 }
+
+                if(isFirstDistance){
+                    getLocation();
+                    isFirstDistance = false;
+                    //Log.e(TAG,"isFirstDistance");
+                    firstLatitude = currentLatitude;
+                    firstLongitude = currentLongitude;
+                    Message tempMsg2 = new Message();
+                    tempMsg2.what = MOVE_FORWARD;
+                    handler.sendMessage(tempMsg2);
+                }
+
                 return;
             }
         });
@@ -509,39 +621,38 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
             //定时器相关
             currentLatitude = globalLatitude;
-            currrentLongitude = globalLongitude;
+            currentLongitude = globalLongitude;
 
-            LatLng llText = new LatLng(globalLatitude, globalLongitude);
+            if(lastNodeLatitude > 0 && lastNodeLongitude >0){
+                LatLng p1 = new LatLng(currentLatitude, currentLongitude);
+                LatLng p2 = new LatLng(lastNodeLatitude, lastNodeLongitude);
+                List<LatLng> points = new ArrayList<LatLng>();
+                points.add(p1);
+                points.add(p2);
+                OverlayOptions ooPolyline = new PolylineOptions().width(10)
+                        .color(0xAAFF0000).points(points);
+                mPolyline = (Polyline) mBaiduMap.addOverlay(ooPolyline);
 
-//构建文字Option对象，用于在地图上添加文字
-            OverlayOptions textOption = new TextOptions()
-                    .bgColor(0xAAFFFF00)
-                    .fontSize(24)
-                    .fontColor(0xFFFF00FF)
-                    .text("位置消息：纬度："+globalLatitude+" 经度："+globalLongitude)
-                    .position(llText);
+                double angle = calculateAngle(lastNodeLatitude,lastNodeLongitude,globalLatitude,globalLongitude);
 
-//在地图上添加该文字对象并显示
-           // mBaiduMap.addOverlay(textOption);
+                MyLocationData nodeAngleData = new MyLocationData.Builder()
+                        .accuracy(location.getRadius())
+                        // 此处设置开发者获取到的方向信息，顺时针0-360
+                        .direction((float)angle).latitude(location.getLatitude())
+                        .longitude(location.getLongitude()).build();
+                mBaiduMap.setMyLocationData(nodeAngleData);
 
-           /* LatLng point = new LatLng(globalLatitude, globalLongitude);
+                MyLocationConfiguration nodeConfig = new MyLocationConfiguration(MyLocationConfiguration.LocationMode.NORMAL, true, BitmapDescriptorFactory.fromResource(R.drawable.black_arrow));
+                //mBaiduMap.setMyLocationConfiguration(nodeConfig);
 
-//构建Marker图标
-
-            BitmapDescriptor bitmap = BitmapDescriptorFactory
-                    .fromResource(R.drawable.icon_marka);
-
-//构建MarkerOption，用于在地图上添加Marker
-
-            OverlayOptions option = new MarkerOptions()
-                    .position(point)
-                    .icon(bitmap);
-
-//在地图上添加Marker，并显示
-
-            mBaiduMap.addOverlay(option);*/
+            }
             if (isFirstLoc) {
                 isFirstLoc = false;
+
+                //开机采集
+                GpsPoint currentGpsPoint = new GpsPoint(globalLongitude,globalLatitude,orientationValues[0],rcvDis);
+                gpsPointSet.addGpsPoint(currentGpsPoint);
+
                 LatLng ll = new LatLng(location.getLatitude(),
                         location.getLongitude());
                 MapStatus.Builder builder = new MapStatus.Builder();
@@ -554,15 +665,21 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
     }
 
-    private void getCurrentLocation(){
-        LatLng p1 = new LatLng(currentLatitude,currrentLongitude);
-        LatLng p2 = new LatLng(lastLatitude,lastLongitude);
+    private void getSecondLocation(){
+        LatLng p1 = new LatLng(currentLatitude,currentLongitude);
+        LatLng p2 = new LatLng(firstLatitude,firstLongitude);
 
         double distance = DistanceUtil.getDistance(p1,p2);
 
-        /*if(distance > 10){
+        Log.e(TAG,"fisrtDistance:"+firstLatitude+" "+firstLongitude);
+        Log.e(TAG,"currentDistance:"+currentLatitude+" "+currentLongitude);
+        Log.e(TAG,"实测距离"+distance);
+
+        if(distance > 10.0){
             //TODO
             //此处是距离大于十米的操作
+            Log.e(TAG,"第二次采样！");
+            getLocation();
           if(bluetoothGattCharacteristic != null) {
               synchronized (token) {
                   try {
@@ -574,9 +691,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                   }
               }
           }
-        }*/
-        lastLongitude = currrentLongitude;
-        lastLatitude = currentLatitude;
+          isSecondPoint = false;
+        }
+        //lastLongitude = currrentLongitude;
+        //lastLatitude = currentLatitude;
     }
     private Handler handler = new Handler(){
 
@@ -595,11 +713,17 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     arrayAdapter.notifyDataSetChanged();
                     break;
                 case TIMER_LOCATION:
-                    getCurrentLocation();
+                    getSecondLocation();
                     break;
                 case NEW_DISTANCE:
                     TextView distanceText = findViewById(R.id.distance);
-                    distanceText.setText("位置信息："+rcvDis+" "+ toggleFlag);
+                    distanceText.setText("距离信息："+rcvDis);
+                    break;
+                case MOVE_FORWARD:
+                    Toast.makeText(MainActivity.this,"请向前走十米",Toast.LENGTH_LONG).show();
+                    break;
+                case NEW_SAMPLE:
+                    Toast.makeText(MainActivity.this,"请走到下一个采样点",Toast.LENGTH_LONG).show();
                     break;
                 default:
                     break;

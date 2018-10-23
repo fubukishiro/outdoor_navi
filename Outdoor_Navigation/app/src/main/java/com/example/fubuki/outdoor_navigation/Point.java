@@ -1,27 +1,20 @@
 package com.example.fubuki.outdoor_navigation;
 
+/*计算点类，该仅表示坐标系中的一个点*/
 public class Point {
     private double x;
     private double y;
-    private int pointNumber;
-
-    Point()
+    private boolean side;
+    Point(double px,double py,boolean pSide)
     {
-        x = 0;
-        y = 0;
-        pointNumber = 0;
+        x = px;
+        y = py;
+        side = pSide;
     }
     Point(double px,double py)
     {
         x = px;
         y = py;
-        pointNumber = 0;
-    }
-    Point(double px,double py,int pPointNumber)
-    {
-        x = px;
-        y = py;
-        pointNumber = pPointNumber;
     }
     //get the sum of x + y
     public double getSum()
@@ -40,4 +33,13 @@ public class Point {
     {
         return y;
     }
+    public boolean getSide()
+    {
+        return side;
+    }
+    public void setSide(boolean pSide)
+    {
+        side = pSide;
+    }
 }
+

@@ -1,17 +1,19 @@
+/*手机采样点的位置，包含坐标和采集到的距离*/
 package com.example.fubuki.outdoor_navigation;
 
 import android.util.Log;
 
 import com.baidu.mapapi.model.LatLng;
 import com.baidu.mapapi.utils.DistanceUtil;
+import com.example.fubuki.outdoor_navigation.Point;
 
 public class GpsPoint {
-    private double angle;       //与北方向夹角，弧度值
-    private double longitude;   //经度
-    private double latitude;    //纬度
-    private double distance;
-    private final double k1 = 96029;
-    private final double k2 = 112000;
+    private double angle;       //采样点与北方向夹角，弧度值
+    private double longitude;   //采样点经度
+    private double latitude;    //采样点纬度
+    private double distance;    //采样点采集的距离
+    public static final double k1 = 96029;
+    public static final double k2 = 112000;
 
     GpsPoint(double pLongitude,double pLatitude,double pAngle,double pDistance)
     {
@@ -20,27 +22,37 @@ public class GpsPoint {
         longitude = pLongitude;
         distance = pDistance;
     }
+    public double getLongitude()
+    {
+        return longitude;
+    }
+    public double getLatitude()
+    {
+        return latitude;
+    }
+    public double getDistance(){return distance;}
+    /*返回两个手机采样点点之间的距离*/
     public double getDistanceFromNextPoint(GpsPoint nextGpsPoint)
     {
+        //TODO
+        //调用百度API获取距离
         LatLng p1 = new LatLng(latitude,longitude);
         LatLng p2 = new LatLng(nextGpsPoint.getLatitude(),nextGpsPoint.getLongitude());
 
-        //TODO
         //此处调用百度地图API获取两个点之间的距离，单位是米
         double distance = DistanceUtil.getDistance(p1,p2);
         Log.e("Distance","Distance:"+distance);
         return DistanceUtil.getDistance(p1,p2);
+
     }
-    Point calculateNode(GpsPoint otherGpsPoint,boolean pointNumber)
+    /*根据两个GPS点计算出两个节点Point*/
+    Point[] calculateNode(GpsPoint otherGpsPoint)
     {
-        double x = 0;
-        double y = 0;
         double pointAngle = 0;
-        angle = 0;
         double nextPointDistance = otherGpsPoint.getDistance();
         double distanceToNextPoint = this.getDistanceFromNextPoint(otherGpsPoint);
         double T = ((this.distance)*(this.distance)+(distanceToNextPoint)*(distanceToNextPoint)-(nextPointDistance)*(nextPointDistance))/(2*distance*distanceToNextPoint);
-        if(T >= 0.9999)
+        if(T >= 0.999999)
         {
             T = 0.999999;
         }
@@ -79,28 +91,42 @@ public class GpsPoint {
         {
             angle = 2 * Math.PI - Math.acos(cosa);
         }
+        Point[] result = new Point[2];
+        double x1,x2,y1,y2;
 
-        if(pointNumber)
+        x1 = this.longitude + this.distance*Math.cos(pointAngle+Math.PI/2-angle)/k1;
+        y1 = this.latitude + this.distance*Math.sin(pointAngle+Math.PI/2-angle)/k2;
+        x2 = this.longitude + this.distance*Math.cos(Math.PI/2-angle-pointAngle)/k1;
+        y2 = this.latitude + this.distance*Math.sin(Math.PI/2-angle-pointAngle)/k2;
+
+        double res1,res2;
+
+        res1 = (this.getLatitude()-otherGpsPoint.getLatitude())/(this.getLongitude()-otherGpsPoint.getLongitude())*(x1-this.getLongitude())+this.getLatitude();
+        res2 = (this.getLatitude()-otherGpsPoint.getLatitude())/(this.getLongitude()-otherGpsPoint.getLongitude())*(x2-this.getLongitude())+this.getLatitude();
+
+        if(res1>res2)
         {
-            x = this.longitude + this.distance*Math.cos(pointAngle+Math.PI/2-angle)/k1;
-            y = this.latitude + this.distance*Math.sin(pointAngle+Math.PI/2-angle)/k2;
+            result[0] = new Point(x1,y1,true);
+            result[1] = new Point(x2,y2,false);
         }
         else
         {
-            x = this.longitude + this.distance*Math.cos(Math.PI/2-angle-pointAngle)/k1;
-            y = this.latitude + this.distance*Math.sin(Math.PI/2-angle-pointAngle)/k2;
+            result[0] = new Point(x1,y1,false);
+            result[1] = new Point(x2,y2,true);
         }
-        return new Point(x,y);
+        return result;
     }
-    public double getDistance()
+    /*判断点在直线的哪一边*/
+    public static boolean GetLineSide(GpsPoint p1,GpsPoint p2,Point ps)
     {
-        return distance;
-    }
-    public double getLatitude(){
-        return latitude;
-    }
-    public double getLongitude(){
-        return longitude;
+        double res = (p2.getLatitude()-p1.getLatitude())/(p1.getLongitude()-p1.getLongitude())*(ps.getX()-p1.getLongitude())+p1.getLatitude();
+        if(ps.getY()>res)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
 }
-

@@ -43,7 +43,7 @@
 
         <meta-data
             android:name="com.baidu.lbsapi.API_KEY"
-            android:value="RgwnRUj0NYSgbFdGkmmH5zPcobCNlxzS" />
+            android:value="fFncbKS4MjYwzDa0siGAfdNyn7WDXPbo" />
         <service android:name="com.baidu.location.f" android:enabled="true" android:process=":remote"> </service>
     </application>
 

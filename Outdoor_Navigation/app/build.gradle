@@ -1,6 +1,11 @@
 apply plugin: 'com.android.application'
 
 android {
+    signingConfigs {
+        config {
+            v2SigningEnabled false
+        }
+    }
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.example.fubuki.outdoor_navigation"
